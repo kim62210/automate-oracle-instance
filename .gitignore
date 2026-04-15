@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+env/
+
+# OCI secrets
+oci.env
+oci.env.bak
+oci_config
+oci_api_private_key.pem
+*.pem
+
+# Runtime artifacts
+INSTANCE_CREATED
+UNHANDLED_ERROR.log
+ERROR_IN_CONFIG.log
+launch_instance.log
+setup_and_info.log
+output.log
+images_list.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
