@@ -3,11 +3,8 @@ import itertools
 import json
 import logging
 import os
-import smtplib
 import sys
 import time
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Union
 
@@ -40,9 +37,6 @@ OPERATING_SYSTEM = os.getenv("OPERATING_SYSTEM", "").strip()
 OS_VERSION = os.getenv("OS_VERSION", "").strip()
 ASSIGN_PUBLIC_IP = os.getenv("ASSIGN_PUBLIC_IP", "false").strip()
 BOOT_VOLUME_SIZE = os.getenv("BOOT_VOLUME_SIZE", "50").strip()
-NOTIFY_EMAIL = os.getenv("NOTIFY_EMAIL", 'False').strip().lower() == 'true'
-EMAIL = os.getenv("EMAIL", "").strip()
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "").strip()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK", "").strip()
 OCI_REGIONS = os.getenv("OCI_REGIONS", "").strip()
 
@@ -98,7 +92,7 @@ try:
         isinstance(confg_var, str) and " " in confg_var
         for confg_var in [OCI_CONFIG, OCT_FREE_AD, SSH_AUTHORIZED_KEYS_FILE,
                           OCI_IMAGE_ID, OCI_COMPUTE_SHAPE, OCI_SUBNET_ID,
-                          OS_VERSION, EMAIL, EMAIL_PASSWORD, DISCORD_WEBHOOK]
+                          OS_VERSION, DISCORD_WEBHOOK]
     )
     config_has_spaces = any(
         " " in value
@@ -158,43 +152,6 @@ def write_into_file(file_path, data):
         file_writer.write(data)
 
 
-def send_email(subject, body, email, password):
-    """Send an HTML email using the SMTP protocol.
-
-    Args:
-        subject (str): The subject of the email.
-        body (str): The HTML body/content of the email.
-        email (str): The sender's email address.
-        password (str): The sender's email password or app-specific password.
-
-    Raises:
-        smtplib.SMTPException: If an error occurs during the SMTP communication.
-    """
-    # Set up the MIME
-    message = MIMEMultipart()
-    message["Subject"] = subject
-    message["From"] = email
-    message["To"] = email
-
-    # Attach HTML content to the email
-    html_body = MIMEText(body, "html")
-    message.attach(html_body)
-
-    # Connect to the SMTP server
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        try:
-            # Start TLS for security
-            server.starttls()
-            # Login to the server
-            server.login(email, password)
-            # Send the email
-            server.sendmail(email, email, message.as_string())
-        except smtplib.SMTPException as mail_err:
-            # Handle SMTP exceptions (e.g., authentication failure, connection issues)
-            logging.error("Error while sending email: %s", mail_err)
-            raise
-
-
 def list_all_instances(compartment_id):
     """Retrieve a list of all instances in the specified compartment.
 
@@ -206,27 +163,6 @@ def list_all_instances(compartment_id):
     """
     list_instances_response = compute_client.list_instances(compartment_id=compartment_id)
     return list_instances_response.data
-
-
-def generate_html_body(instance):
-    """Generate HTML body for the email with instance details.
-
-    Args:
-        instance (dict): The instance dictionary returned from the OCI service.
-
-    Returns:
-        str: HTML body for the email.
-    """
-    # Replace placeholders with instance details
-    with open('email_content.html', 'r', encoding='utf-8') as email_temp:
-        html_template = email_temp.read()
-    html_body = html_template.replace('&lt;INSTANCE_ID&gt;', instance.id)
-    html_body = html_body.replace('&lt;DISPLAY_NAME&gt;', instance.display_name)
-    html_body = html_body.replace('&lt;AD&gt;', instance.availability_domain)
-    html_body = html_body.replace('&lt;SHAPE&gt;', instance.shape)
-    html_body = html_body.replace('&lt;STATE&gt;', instance.lifecycle_state)
-
-    return html_body
 
 
 def create_instance_details_file_and_notify(instance, shape=ARM_SHAPE):
@@ -261,12 +197,6 @@ def create_instance_details_file_and_notify(instance, shape=ARM_SHAPE):
     )
     send_discord_message(discord_body)
 
-    # Generate HTML body for email
-    html_body = generate_html_body(instance)
-
-    if NOTIFY_EMAIL:
-        send_email('OCI INSTANCE CREATED', html_body, EMAIL, EMAIL_PASSWORD)
-
 
 def notify_on_failure(failure_msg):
     """Notifies users when the Instance Creation Failed due to an error that's
@@ -276,7 +206,7 @@ def notify_on_failure(failure_msg):
         failure_msg (msg): The error message.
     """
 
-    mail_body = (
+    log_body = (
         "스크립트가 예외로 인해 비정상 종료되었습니다.\n\n"
         "재실행: ./setup_init.sh rerun\n\n"
         "문제가 지속되면 아래 저장소에 이슈를 등록해 주세요:\n"
@@ -284,10 +214,8 @@ def notify_on_failure(failure_msg):
         "에러 메시지:\n\n"
         f"{failure_msg}"
     )
-    write_into_file('UNHANDLED_ERROR.log', mail_body)
+    write_into_file('UNHANDLED_ERROR.log', log_body)
     send_discord_message(f"**OCI 스크립트 비정상 종료**\n```\n{failure_msg[:1800]}\n```")
-    if NOTIFY_EMAIL:
-        send_email('OCI INSTANCE CREATION SCRIPT: FAILED DUE TO AN ERROR', mail_body, EMAIL, EMAIL_PASSWORD)
 
 
 def check_instance_state_and_write(compartment_id, shape, states=('RUNNING', 'PROVISIONING'),

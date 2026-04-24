@@ -40,27 +40,11 @@ if [ "$1" != "rerun" ]; then
     pip install -r requirements.txt
 fi
 
-# Discord 메시지 전송
-send_discord_message() {
-    curl -s -H "Content-Type: application/json" -X POST \
-         -d "{\"content\":\"$1\"}" "$DISCORD_WEBHOOK" >/dev/null
-}
-
-# Telegram 메시지 전송
-send_telegram_message() {
-    curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-         -d chat_id="$TELEGRAM_USER_ID" \
-         -d text="$1" >/dev/null
-}
-
-# 통합 알림 인터페이스 (설정된 채널만 사용)
+# Discord 알림 (DISCORD_WEBHOOK 이 설정된 경우에만 전송)
 send_notification() {
     if [ -n "$DISCORD_WEBHOOK" ]; then
-        send_discord_message "$1"
-    fi
-
-    if [ -n "$TELEGRAM_TOKEN" ] && [ -n "$TELEGRAM_USER_ID" ]; then
-        send_telegram_message "$1"
+        curl -s -H "Content-Type: application/json" -X POST \
+             -d "{\"content\":\"$1\"}" "$DISCORD_WEBHOOK" >/dev/null
     fi
 }
 
