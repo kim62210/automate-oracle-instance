@@ -26,7 +26,11 @@ E2_MICRO_SHAPE = "VM.Standard.E2.1.Micro"
 OCI_CONFIG = os.getenv("OCI_CONFIG", "").strip()
 OCT_FREE_AD = os.getenv("OCT_FREE_AD", "").strip()
 DISPLAY_NAME = os.getenv("DISPLAY_NAME", "").strip()
-WAIT_TIME = int(os.getenv("REQUEST_WAIT_TIME_SECS", "0").strip())
+try:
+    WAIT_TIME = int(os.getenv("REQUEST_WAIT_TIME_SECS", "60").strip() or "60")
+except ValueError:
+    print("[CONFIG ERROR] REQUEST_WAIT_TIME_SECS 는 정수여야 합니다.", file=sys.stderr)
+    sys.exit(1)
 SSH_AUTHORIZED_KEYS_FILE = os.getenv("SSH_AUTHORIZED_KEYS_FILE", "").strip()
 OCI_IMAGE_ID = os.getenv("OCI_IMAGE_ID", None).strip() if os.getenv("OCI_IMAGE_ID") else None
 OCI_COMPUTE_SHAPE = os.getenv("OCI_COMPUTE_SHAPE", ARM_SHAPE).strip()
@@ -42,32 +46,76 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "").strip()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK", "").strip()
 OCI_REGIONS = os.getenv("OCI_REGIONS", "").strip()
 
-# Read the configuration from oci_config file
+ERROR_LOG_PATH = Path("ERROR_IN_CONFIG.log")
+
+
+def _abort_with_config_error(message: str) -> None:
+    """OCI Config 관련 오류를 ERROR_IN_CONFIG.log 에 기록하고 즉시 종료."""
+    ERROR_LOG_PATH.write_text(message, encoding="utf-8")
+    print(f"[CONFIG ERROR] {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+# OCI Config 파일 사전 검증 (configparser.read 는 파일 부재 시에도 silent fail 함)
+if not OCI_CONFIG:
+    _abort_with_config_error(
+        "oci.env 의 OCI_CONFIG 가 비어있습니다.\n"
+        "1) cp oci.env.example oci.env\n"
+        "2) oci.env 의 OCI_CONFIG 에 OCI API config 파일의 절대 경로를 지정하세요."
+    )
+
+oci_config_file = Path(OCI_CONFIG).expanduser()
+if not oci_config_file.is_file():
+    _abort_with_config_error(
+        f"OCI_CONFIG 경로의 파일을 찾을 수 없습니다: {oci_config_file}\n"
+        "절대 경로인지, 파일이 실제로 존재하는지, 읽기 권한이 있는지 확인하세요."
+    )
+
 config = configparser.ConfigParser()
 try:
-    config.read(OCI_CONFIG)
-    OCI_USER_ID = config.get('DEFAULT', 'user')
+    read_files = config.read(oci_config_file)
+    if not read_files:
+        _abort_with_config_error(
+            f"OCI Config 파일을 읽지 못했습니다: {oci_config_file}\n"
+            "파일 권한 또는 인코딩(UTF-8)을 확인하세요."
+        )
+
+    try:
+        OCI_USER_ID = config.get("DEFAULT", "user")
+    except configparser.NoOptionError:
+        _abort_with_config_error(
+            f"OCI Config 파일에 [DEFAULT] 의 user= 항목이 없습니다: {oci_config_file}\n"
+            "sample_oci_config 형식을 참고해 user/fingerprint/tenancy/region/key_file 을 채우세요."
+        )
+
     if OCI_COMPUTE_SHAPE not in (ARM_SHAPE, E2_MICRO_SHAPE):
-        raise ValueError(f"{OCI_COMPUTE_SHAPE} is not an acceptable shape")
-    env_has_spaces = any(isinstance(confg_var, str) and " " in confg_var
-                        for confg_var in [OCI_CONFIG, OCT_FREE_AD,WAIT_TIME,
-                                SSH_AUTHORIZED_KEYS_FILE, OCI_IMAGE_ID, 
-                                OCI_COMPUTE_SHAPE, SECOND_MICRO_INSTANCE, 
-                                OCI_SUBNET_ID, OS_VERSION, NOTIFY_EMAIL,EMAIL,
-                                EMAIL_PASSWORD, DISCORD_WEBHOOK]
-                        )
-    config_has_spaces = any(' ' in value for section in config.sections() 
-                            for _, value in config.items(section))
+        _abort_with_config_error(
+            f"OCI_COMPUTE_SHAPE 값이 올바르지 않습니다: {OCI_COMPUTE_SHAPE}\n"
+            f"허용값: {ARM_SHAPE} 또는 {E2_MICRO_SHAPE}"
+        )
+
+    env_has_spaces = any(
+        isinstance(confg_var, str) and " " in confg_var
+        for confg_var in [OCI_CONFIG, OCT_FREE_AD, SSH_AUTHORIZED_KEYS_FILE,
+                          OCI_IMAGE_ID, OCI_COMPUTE_SHAPE, OCI_SUBNET_ID,
+                          OS_VERSION, EMAIL, EMAIL_PASSWORD, DISCORD_WEBHOOK]
+    )
+    config_has_spaces = any(
+        " " in value
+        for section in config.sections()
+        for _, value in config.items(section)
+    )
     if env_has_spaces:
-        raise ValueError("oci.env has spaces in values which is not acceptable")
+        _abort_with_config_error("oci.env 값에 공백이 포함돼 있습니다. 공백을 제거하세요.")
     if config_has_spaces:
-        raise ValueError("oci_config has spaces in values which is not acceptable")        
+        _abort_with_config_error("oci_config 값에 공백이 포함돼 있습니다. 공백을 제거하세요.")
 
 except configparser.Error as e:
-    with open("ERROR_IN_CONFIG.log", "w", encoding='utf-8') as file:
-        file.write(str(e))
+    _abort_with_config_error(f"OCI Config 파싱 오류: {e}")
 
-    print(f"Error reading the configuration file: {e}")
+# 정상 진입 시점 -- 이전 실행에서 남은 stale 에러 로그 정리
+if ERROR_LOG_PATH.exists():
+    ERROR_LOG_PATH.unlink()
 
 # Set up logging
 logging.basicConfig(
@@ -82,7 +130,7 @@ fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 logging_step5.addHandler(fh)
 
 # Set up OCI Config and Clients
-oci_config_path = OCI_CONFIG if OCI_CONFIG else "~/.oci/config"
+oci_config_path = str(oci_config_file)
 config = oci.config.from_file(oci_config_path)
 iam_client = oci.identity.IdentityClient(config)
 network_client = oci.core.VirtualNetworkClient(config)
@@ -229,11 +277,11 @@ def notify_on_failure(failure_msg):
     """
 
     mail_body = (
-        "The script encountered an unhandled error and exited unexpectedly.\n\n"
-        "Please re-run the script by executing './setup_init.sh rerun'.\n\n"
-        "And raise a issue on GitHub if its not already existing:\n"
-        "https://github.com/mohankumarpaluru/oracle-freetier-instance-creation/issues\n\n"
-        " And include the following error message to help us investigate and resolve the problem:\n\n"
+        "스크립트가 예외로 인해 비정상 종료되었습니다.\n\n"
+        "재실행: ./setup_init.sh rerun\n\n"
+        "문제가 지속되면 아래 저장소에 이슈를 등록해 주세요:\n"
+        "https://github.com/kim62210/automate-oracle-instance/issues\n\n"
+        "에러 메시지:\n\n"
         f"{failure_msg}"
     )
     write_into_file('UNHANDLED_ERROR.log', mail_body)

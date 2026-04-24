@@ -27,17 +27,26 @@ git clone https://github.com/kim62210/automate-oracle-instance.git
 cd automate-oracle-instance
 ```
 
-### 1. OCI API 설정
+### 1. OCI API Config 파일 준비
 
+OCI Console > Profile > **API Keys > Add API Key** 에서 키를 생성하면 우측에
+config 미리보기가 표시된다. 이 내용을 그대로 파일로 저장한다.
+
+옵션 A. **OCI CLI 표준 위치 사용 (권장)**
 ```bash
-# API Private Key 저장
-vi oci_api_private_key.pem   # Private Key 내용 붙여넣기
-
-# OCI Config 파일 생성 (sample_oci_config 참고)
-vi oci_config
+mkdir -p ~/.oci
+vi ~/.oci/config                  # API Key 생성 화면의 Config 내용 붙여넣기
+vi ~/.oci/oci_api_private_key.pem # Private Key (.pem) 내용 붙여넣기
+chmod 600 ~/.oci/oci_api_private_key.pem
 ```
 
-`oci_config` 예시:
+옵션 B. **레포 디렉토리 안에 보관**
+```bash
+vi oci_config                     # sample_oci_config 참고
+vi oci_api_private_key.pem
+```
+
+`oci_config` 예시 (`sample_oci_config` 와 동일 형식):
 ```ini
 [DEFAULT]
 user=ocid1.user.oc1..aaaaaaa...
@@ -47,17 +56,32 @@ region=ap-seoul-1
 key_file=/absolute/path/to/oci_api_private_key.pem
 ```
 
-### 2. 환경변수 설정
+> [!IMPORTANT]
+> `key_file` 은 **반드시 절대 경로**로 적는다. `~` 확장은 동작하지 않는다.
 
-대화형 설정:
+### 2. 환경변수 (`oci.env`) 설정
+
+먼저 템플릿을 복사한다 (이 단계를 건너뛰면 `ERROR_IN_CONFIG.log` 가 생성된다):
+```bash
+cp oci.env.example oci.env
+```
+
+옵션 A. **대화형 생성**
 ```bash
 ./setup_env.sh
 ```
 
-또는 직접 편집:
+옵션 B. **직접 편집**
 ```bash
-cp oci.env.example oci.env
 vi oci.env
+```
+
+최소 설정 예시:
+```bash
+OCI_CONFIG=/Users/your_id/.oci/config   # 1단계에서 만든 파일의 절대 경로
+OCT_FREE_AD=AD-1
+OCI_REGIONS=ap-seoul-1,ap-chuncheon-1
+SSH_AUTHORIZED_KEYS_FILE=/Users/your_id/.ssh/id_ed25519_oci.pub
 ```
 
 ### 3. 실행
@@ -70,6 +94,9 @@ vi oci.env
 ```bash
 ./setup_init.sh rerun
 ```
+
+정상 시작되면 `setup_init.log`, `launch_instance.log`, `setup_and_info.log`
+세 가지 로그가 생성된다.
 
 ## 환경변수 (oci.env)
 
@@ -115,10 +142,49 @@ vi oci.env
 
 | 파일 | 내용 |
 |------|------|
-| `launch_instance.log` | 인스턴스 생성 API 호출 로그 |
+| `setup_init.log` | `main.py` 의 stdout/stderr (예외 trace 포함) |
+| `launch_instance.log` | 인스턴스 생성 API 호출 + 재시도 로그 |
 | `setup_and_info.log` | 파라미터 및 설정 정보 |
-| `ERROR_IN_CONFIG.log` | OCI Config 오류 |
+| `ERROR_IN_CONFIG.log` | OCI Config 검증 실패 사유 (정상 시 자동 삭제) |
 | `INSTANCE_CREATED` | 생성된 인스턴스 정보 |
+
+## 트러블슈팅
+
+### `ERROR_IN_CONFIG.log` 가 생성되며 셋업이 멈춤
+
+`main.py` 가 OCI Config 검증에 실패하면 사유를 로그 파일에 기록하고
+즉시 종료한다. `setup_init.sh` 가 이를 감지해 셋업을 중단한다.
+
+대표 원인과 진단 명령:
+
+| 메시지 | 원인 | 해결 |
+|--------|------|------|
+| `OCI_CONFIG 가 비어있습니다` | `oci.env` 미생성 | `cp oci.env.example oci.env` 후 `OCI_CONFIG` 채우기 |
+| `파일을 찾을 수 없습니다` | 경로 오타 / 상대 경로 | 절대 경로로 수정, `ls -la` 로 존재 확인 |
+| `[DEFAULT] 의 user= 항목이 없습니다` | OCI Config 내용 누락 | `sample_oci_config` 참고해 user/fingerprint/tenancy/region/key_file 채우기 |
+| `값에 공백이 포함돼 있습니다` | 따옴표 / 공백 문자 | 값 양옆 공백 제거, 따옴표 사용 금지 |
+
+진단 체크리스트:
+```bash
+ls -la oci.env                                                    # 1) 파일 존재
+grep "^OCI_CONFIG=" oci.env                                       # 2) 경로 확인
+cat "$(grep '^OCI_CONFIG=' oci.env | cut -d= -f2)"                # 3) Config 내용
+cat ERROR_IN_CONFIG.log                                           # 4) 실제 사유
+```
+
+### `setup_init.log` 에서 Python 예외 확인
+
+이전 버전은 `nohup ... > /dev/null 2>&1` 으로 stderr 가 모두 사라졌었다.
+현재 버전은 모든 출력이 `setup_init.log` 에 기록된다.
+```bash
+tail -f setup_init.log
+```
+
+### 셋업은 됐지만 계속 `Out of host capacity` 만 나옴
+
+정상 동작이다. Free Tier ARM 자원은 매우 부족해 수 시간~수 일이 걸릴 수 있다.
+`OCI_REGIONS=ap-seoul-1,ap-chuncheon-1` 처럼 멀티 리전을 지정하면 순환 시도하며
+Discord/Telegram 알림으로 10회마다 진행 상황이 전송된다.
 
 ## 알림
 
