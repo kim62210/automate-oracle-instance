@@ -257,6 +257,41 @@ ssh -i ~/.ssh/id_ed25519_oci ubuntu@<공용 IP>
 
 ---
 
+## 환경변수 빠른 참조 (oci.env)
+
+각 항목을 어디서 얻는지 한눈에 정리한 표입니다.
+자세한 단계는 위 STEP 1~7 참고.
+
+### 필수 항목
+
+| 변수 | 무엇인가요? | 어디서 얻나요? |
+|------|------------|-------------|
+| `OCI_CONFIG` | OCI API Config 파일의 절대 경로 | OCI Console → 내 프로필 → API 키 → "구성 파일 미리보기" 내용을 `~/.oci/config` 에 저장 (STEP 1~2) |
+| `OCT_FREE_AD` | Always Free 가용 도메인 (대부분 `AD-1`) | OCI Console → 컴퓨트 → 인스턴스 생성 화면의 "배치(Placement)" (STEP 3) |
+| `SSH_AUTHORIZED_KEYS_FILE` | SSH 공개키(.pub) 절대 경로 | `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_oci -N ""` 로 생성 (STEP 4) |
+
+### 선택 항목
+
+| 변수 | 무엇인가요? | 어디서 얻나요? / 기본값 |
+|------|------------|----------------------|
+| `OCI_REGIONS` | 시도할 리전(쉼표 구분) | OCI Console 우측 상단 리전 드롭다운. 예) `ap-seoul-1,ap-chuncheon-1` |
+| `DISPLAY_NAME` | 인스턴스 이름 | 자유롭게. 기본값 `a1-free-arm` |
+| `OCI_COMPUTE_SHAPE` | 서버 종류 | `VM.Standard.A1.Flex` (ARM 권장) 또는 `VM.Standard.E2.1.Micro` |
+| `SECOND_MICRO_INSTANCE` | 2번째 Micro 만들 때만 `True` | `False` |
+| `REQUEST_WAIT_TIME_SECS` | 재시도 간격(초) | 기본 `60` |
+| `OCI_SUBNET_ID` | 서브넷 OCID | OCI Console → 네트워킹 → VCN → 서브넷. 비우면 자동 탐색 |
+| `OCI_IMAGE_ID` | 특정 이미지 OCID | OCI Console → 컴퓨트 → 이미지. 비우면 OS+버전으로 자동 탐색 |
+| `OPERATING_SYSTEM` | OS 이름 | `Canonical Ubuntu` (기본) |
+| `OS_VERSION` | OS 버전 | `24.04` (기본) |
+| `ASSIGN_PUBLIC_IP` | 공용 IP 자동 할당 | `true` 또는 `false` |
+| `BOOT_VOLUME_SIZE` | 부트 디스크 GB (최소 50) | `50` |
+| `DISCORD_WEBHOOK` | Discord 알림 URL | Discord 서버 설정 → 연동 → 웹후크 → URL 복사 (STEP 7) |
+
+> 💡 **모르는 항목은 비워두거나 기본값을 그대로 사용하면 됩니다.**
+> `oci.env.example` 파일에는 항목별로 더 자세한 클릭 경로가 주석으로 적혀 있습니다.
+
+---
+
 ## 로그 파일 안내
 
 | 파일 | 용도 |
