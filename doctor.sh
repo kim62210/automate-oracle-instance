@@ -59,7 +59,8 @@ else
     OCI_CONFIG_EXPANDED=$(expand_tilde "$OCI_CONFIG")
     if [ ! -f "$OCI_CONFIG_EXPANDED" ]; then
         fail "OCI_CONFIG 파일 없음: $OCI_CONFIG_EXPANDED"
-        echo "         -> STEP 1~2 따라 ~/.oci/config 파일 생성 필요"
+        echo "         -> README STEP 2 참고하여 config 파일 생성 필요"
+        echo "            (기본: 레포 폴더 안의 ./oci_config)"
     else
         ok "OCI_CONFIG 파일 존재: $OCI_CONFIG_EXPANDED"
         for key in user fingerprint tenancy region key_file; do

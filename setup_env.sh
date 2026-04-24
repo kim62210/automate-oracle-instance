@@ -41,7 +41,7 @@ cat <<'EOF'
 EOF
 echo
 
-OCI_CONFIG=$(ask "OCI Config 파일 절대 경로" "$HOME/.oci/config")
+OCI_CONFIG=$(ask "OCI Config 파일 경로 (./oci_config 권장 - 레포 폴더 안)" "./oci_config")
 
 INSTANCE_NAME=$(ask "인스턴스 표시 이름" "a1-free-arm")
 
