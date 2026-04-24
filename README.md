@@ -122,17 +122,17 @@ nano ~/.oci/config
 
 ---
 
-## STEP 4. SSH 키 만들기
+## STEP 4. SSH 키 (자동 생성됨, 직접 만들 필요 없음)
 
 서버에 접속하려면 자물쇠와 열쇠 같은 SSH 키 한 쌍이 필요합니다.
-이미 있다면 이 단계는 건너뛰어도 됩니다.
+**스크립트 첫 실행 시 자동으로 생성**되니 신경 쓰지 않아도 됩니다.
 
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_oci -N ""
-```
-- 두 개의 파일이 생성됩니다:
-  - `~/.ssh/id_ed25519_oci` (개인 키 - 절대 공유 금지)
-  - `~/.ssh/id_ed25519_oci.pub` (공개 키 - 서버에 등록할 키)
+자동 생성되는 파일 (기본값):
+- 공개키: `~/.ssh/id_oci_auto.pub`
+- 개인키: `~/.ssh/id_oci_auto_private` ← **서버 SSH 접속 시 사용**
+
+> 이미 본인 SSH 키가 있고 그걸 쓰고 싶다면 STEP 6 에서 `oci.env` 의
+> `SSH_AUTHORIZED_KEYS_FILE` 경로만 본인 키로 바꾸면 됩니다.
 
 ---
 
@@ -165,16 +165,20 @@ cp oci.env.example oci.env
 nano oci.env
 ```
 
-최소한 아래 4개 항목만 채우면 됩니다:
-```bash
-OCI_CONFIG=/Users/본인_계정명/.oci/config
-OCT_FREE_AD=AD-1
-OCI_REGIONS=ap-seoul-1,ap-chuncheon-1
-SSH_AUTHORIZED_KEYS_FILE=/Users/본인_계정명/.ssh/id_ed25519_oci.pub
-```
+**대부분의 항목은 이미 합리적인 기본값이 채워져 있습니다.**
+실제로 본인이 채워야 할 항목은 보통 1가지뿐입니다:
 
-> **주의**: 경로 안에 `~` 를 쓰지 말고 `/Users/...` 처럼 **전체 경로**를 적으세요.
-> `whoami` 로 본인 계정명 확인 가능합니다.
+| 항목 | 채워야 할 때 |
+|------|--------------|
+| `OCI_SUBNET_ID` | 신규 OCI 계정인 경우 (STEP 3-1 에서 만든 서브넷 OCID) |
+| `DISCORD_WEBHOOK` | 알림 받고 싶을 때 (STEP 7 참고) |
+
+기본값으로 동작하는 항목 (수정 불필요):
+- `OCI_CONFIG=~/.oci/config` -- STEP 1~2 표준 위치
+- `SSH_AUTHORIZED_KEYS_FILE=~/.ssh/id_oci_auto.pub` -- 없으면 자동 생성됨
+- `OCI_REGIONS=ap-seoul-1,ap-chuncheon-1` -- 한국 리전
+- `OPERATING_SYSTEM=Canonical Ubuntu`, `OS_VERSION=24.04`
+- `REQUEST_WAIT_TIME_SECS=90` -- OCI 차단 회피 권장값
 
 ---
 
@@ -197,7 +201,30 @@ DISCORD_WEBHOOK=https://discord.com/api/webhooks/.....
 
 ---
 
-## STEP 8. 실행!
+## STEP 8. 셋업 점검 (강력 추천)
+
+실행 전에 셋업 상태를 진단해 주는 `doctor.sh` 가 있습니다.
+어떤 항목이 비었고 어떤 게 OK 인지 한눈에 보여줍니다.
+
+```bash
+./doctor.sh
+```
+
+검사 항목 (8단계):
+1. `oci.env` 파일 존재
+2. `OCI_CONFIG` 경로/내용 (필수 5개 키 + .pem 실재 여부)
+3. `OCT_FREE_AD` 설정 여부
+4. SSH 공개키 (없으면 첫 실행 시 자동 생성됨을 안내)
+5. `OCI_SUBNET_ID` (신규 계정 안내)
+6. Python venv + 의존 패키지
+7. **OCI 인증 (실제 read-only API 호출)**
+8. Discord webhook 설정 여부 (`./doctor.sh --discord` 로 실제 전송 테스트)
+
+요약 줄에서 `[FAIL] 0` 이면 다음 단계로 진행 OK.
+
+---
+
+## STEP 9. 실행!
 
 ```bash
 ./setup_init.sh
@@ -230,6 +257,14 @@ kill <PID>
 ---
 
 ## 자주 발생하는 문제
+
+### 우선 `./doctor.sh` 부터 실행
+
+대부분의 문제는 진단 스크립트로 1초 안에 원인이 드러납니다.
+```bash
+./doctor.sh
+```
+`[FAIL]` 표시된 항목의 안내 메시지가 가장 정확한 해결책입니다.
 
 ### "ERROR_IN_CONFIG.log 가 생겼어요" / 셋업이 멈춰요
 
@@ -284,13 +319,13 @@ ssh -i ~/.ssh/id_ed25519_oci ubuntu@<공용 IP>
 각 항목을 어디서 얻는지 한눈에 정리한 표입니다.
 자세한 단계는 위 STEP 1~7 참고.
 
-### 필수 항목
+### 필수 항목 (기본값 그대로 사용 가능)
 
-| 변수 | 무엇인가요? | 어디서 얻나요? |
-|------|------------|-------------|
-| `OCI_CONFIG` | OCI API Config 파일의 절대 경로 | OCI Console → 내 프로필 → API 키 → "구성 파일 미리보기" 내용을 `~/.oci/config` 에 저장 (STEP 1~2) |
-| `OCT_FREE_AD` | Always Free 가용 도메인 (대부분 `AD-1`) | OCI Console → 컴퓨트 → 인스턴스 생성 화면의 "배치(Placement)" (STEP 3) |
-| `SSH_AUTHORIZED_KEYS_FILE` | SSH 공개키(.pub) 절대 경로 | `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_oci -N ""` 로 생성 (STEP 4) |
+| 변수 | 기본값 | 채워야 할 때 |
+|------|--------|--------------|
+| `OCI_CONFIG` | `~/.oci/config` | STEP 1~2 표준 위치를 따랐다면 그대로 |
+| `OCT_FREE_AD` | `AD-1` | 대부분 그대로 (다른 AD 라면 STEP 3) |
+| `SSH_AUTHORIZED_KEYS_FILE` | `~/.ssh/id_oci_auto.pub` | 없으면 자동 생성. 본인 키 쓰려면 경로만 변경 |
 
 ### 선택 항목
 

@@ -366,7 +366,7 @@ def read_or_generate_ssh_public_key(public_key_file: Union[str, Path]):
     Returns:
         Union[str, Path]: The SSH public key.
     """
-    public_key_path = Path(public_key_file)
+    public_key_path = Path(public_key_file).expanduser()
 
     if not public_key_path.is_file():
         logging.info("SSH key doesn't exist... Generating SSH Key Pair")
