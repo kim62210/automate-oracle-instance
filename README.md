@@ -67,10 +67,18 @@ mkdir -p ~/.oci
 
 ### 2-2. 다운로드한 개인 키 옮기기
 
+다운로드된 `.pem` 파일의 정확한 이름을 먼저 확인합니다.
 ```bash
-mv ~/Downloads/*.pem ~/.oci/oci_api_private_key.pem
+ls -lt ~/Downloads/*.pem
+```
+가장 최근 파일이 1-2 단계에서 받은 키입니다. 파일명을 그대로 복사해 아래 명령에 붙여넣으세요.
+```bash
+mv ~/Downloads/<위에서_확인한_파일명>.pem ~/.oci/oci_api_private_key.pem
 chmod 600 ~/.oci/oci_api_private_key.pem
 ```
+
+> ⚠️ **`mv ~/Downloads/*.pem` 처럼 와일드카드를 쓰지 마세요.**
+> Downloads 에 다른 `.pem` 파일이 있으면 마지막 하나만 살아남고 나머지는 사라집니다.
 
 ### 2-3. config 파일 만들기
 
@@ -90,35 +98,76 @@ nano ~/.oci/config
 ## STEP 3. 가용 도메인(AD) 확인하기
 
 가용 도메인은 "데이터센터 안의 어느 구역에서 서버를 만들지" 정하는 값입니다.
-대부분 `AD-1` 입니다. 확인 방법:
+**대부분의 한국 사용자는 그냥 `AD-1` 사용하면 됩니다.** 정확하게 확인하고 싶다면:
 
 1. OCI Console 좌측 햄버거 메뉴 → **컴퓨트(Compute)** → **인스턴스(Instances)**
 2. **인스턴스 생성(Create Instance)** 버튼 클릭 (실제로 만들 필요는 없습니다)
-3. **배치(Placement)** 항목에서 **이름(Name)** 옆에 표시된 값 확인
-   - 예: `xxxx:AP-SEOUL-1-AD-1` → `AD-1` 사용
-4. 확인만 하고 **취소(Cancel)** 누르고 나오기
+3. **이미지 및 셰이프(Image and shape)** 펼치기 → **셰이프 변경(Change shape)**
+   → **VM.Standard.A1.Flex** 선택
+4. **배치(Placement)** 항목 아래 가용 도메인 목록에서 **"항상 무료 적격(Always Free Eligible)"**
+   라벨이 붙은 도메인을 찾습니다.
+   - 예: `xxxx:AP-SEOUL-1-AD-1` 옆에 "항상 무료 적격" 표시 → `AD-1` 사용
+   - 라벨이 다른 AD 에 붙어 있으면 해당 번호(`AD-2`, `AD-3` 등)를 `oci.env` 의 `OCT_FREE_AD` 에 적습니다.
+5. 확인만 하고 **취소(Cancel)** 누르고 나오기
+
+> 💡 서울 리전 기준으로 `AD-1` 만 존재합니다. 일부 리전(예: us-ashburn-1)은
+> AD 가 3개라 어느 게 Always Free 가능인지 확인이 필요합니다.
 
 ---
 
-## STEP 3-1. (신규 계정만) VCN/Subnet 생성
+## STEP 3-0. (멀티 리전 시도 시) 리전 구독(Subscribe)
 
-**오라클 클라우드를 처음 쓴다면 가상 네트워크(VCN)가 없어서
-이 스크립트가 어디에 인스턴스를 만들지 못 찾습니다.**
-이미 VCN 이 있다면 이 단계는 건너뛰세요.
+OCI 는 가입 시 선택한 **홈 리전 외에는 사용할 수 없습니다**.
+다른 리전(예: `ap-chuncheon-1`)을 추가로 시도하려면 먼저 **구독**해야 합니다.
+
+홈 리전 하나만 쓸 거면 이 단계는 건너뛰세요.
+
+1. OCI Console **우측 상단 리전 드롭다운** 클릭
+2. 맨 아래 **리전 관리(Manage Regions)** 클릭
+3. 사용하고 싶은 리전 옆 **구독(Subscribe)** 버튼 클릭
+   - 한국 추가 권장: `Korea Central (Chuncheon)` (= `ap-chuncheon-1`)
+4. 약관 동의 → **구독(Subscribe)** → 활성화까지 1-2 분 대기
+5. 활성화되면 우측 상단 드롭다운에서 해당 리전으로 전환 가능해집니다.
+
+> 💡 구독은 **무료** 이며 횟수 제한 있음 (한 테넌시당 보통 6개).
+> 구독 후 활성화에 시간이 걸리므로, 미리 구독해 두는 게 좋습니다.
+
+> ⚠️ 구독 안 된 리전을 `OCI_REGIONS` 에 적으면 doctor.sh 의 [7] OCI 인증은
+> 통과해도, 실제 launch 시 해당 리전이 자동 skip 됩니다 (`launch_instance.log`
+> 에 "authentication required" 경고).
+
+---
+
+## STEP 3-1. VCN/Subnet 준비 (서브넷 OCID 확보)
+
+OCI 인스턴스는 반드시 어떤 가상 네트워크(VCN) 안에 만들어집니다.
+스크립트는 빈 `OCI_SUBNET_ID` 면 첫 공용 서브넷을 자동 탐색하지만,
+**OCID 를 직접 지정하는 게 가장 안전**합니다.
+
+### 옵션 A. **이미 VCN/Subnet 이 있는 경우 (OCID 만 복사)**
+
+1. OCI Console 햄버거 메뉴 → **네트워킹(Networking)**
+   → **가상 클라우드 네트워크(Virtual Cloud Networks)**
+2. 본인 컴파트먼트 선택 → 사용할 **VCN 클릭**
+3. 좌측 **서브넷(Subnets)** 클릭 → **공용 서브넷(Public Subnet)** 클릭
+   - 서브넷 옆 "공용(Public)" 표시 또는 "VNIC 에 공용 IP 금지" 가 **꺼져있는** 것을 선택
+4. 우측 페이지 상단 **OCID** 옆 **복사(Copy)** 버튼 클릭
+5. 복사한 값을 `oci.env` 의 `OCI_SUBNET_ID=` 에 붙여넣기
+
+### 옵션 B. **신규 계정 / VCN 이 없는 경우 (마법사로 생성)**
 
 1. OCI Console 햄버거 메뉴 → **네트워킹(Networking)**
    → **가상 클라우드 네트워크(Virtual Cloud Networks)**
 2. **VCN 마법사 시작(Start VCN Wizard)** 버튼 클릭
 3. **인터넷 연결성을 가진 VCN 생성(Create VCN with Internet Connectivity)** 선택
-4. VCN 이름 입력 (예: `free-tier-vcn`) → 나머지 기본값 그대로 → **다음/생성**
-
-생성 후, **서브넷 OCID 를 복사해서 메모**해 둡니다:
-- 만든 VCN 클릭 → 좌측 **서브넷(Subnets)** → 공용 서브넷 클릭
-- 우측 OCID 옆 **복사(Copy)** 버튼 클릭
+4. VCN 이름 입력 (예: `free-tier-vcn`) → 나머지 기본값 그대로 → **다음 → 생성**
+5. 생성 완료 후 옵션 A 의 3-5 단계로 OCID 복사
 
 > 💡 멀티 리전(`ap-seoul-1,ap-chuncheon-1` 등)을 쓰려면
-> **각 리전마다** VCN/Subnet 을 만들어야 합니다.
-> (먼저 우측 상단 리전 드롭다운으로 리전 변경 후 같은 절차 반복)
+> **각 리전마다** VCN/Subnet 이 있어야 합니다.
+> (우측 상단 리전 드롭다운으로 리전 변경 후 같은 절차 반복)
+> 다만 `oci.env` 에는 `OCI_SUBNET_ID` 한 개만 적을 수 있으므로,
+> 다른 리전은 자동 탐색에 의존합니다.
 
 ---
 
@@ -306,11 +355,33 @@ curl -H "Content-Type: application/json" \
 
 ## 만든 후 서버 접속하기
 
+### 1. 공용 IP 확인
+
+방법 A. **OCI Console**
+1. OCI Console 햄버거 → **컴퓨트(Compute)** → **인스턴스(Instances)**
+2. 만들어진 인스턴스 이름 클릭 (예: `a1-free-arm`)
+3. **인스턴스 정보(Instance Information)** 영역의
+   **공용 IP 주소(Public IP Address)** 값 복사
+
+방법 B. **터미널**
 ```bash
-ssh -i ~/.ssh/id_ed25519_oci ubuntu@<공용 IP>
+cat INSTANCE_CREATED   # 스크립트가 생성한 결과 파일
 ```
-공용 IP 는 OCI Console > 컴퓨트 > 인스턴스 상세 페이지에서 확인할 수 있고,
-`INSTANCE_CREATED` 파일에도 정보가 적혀 있습니다.
+
+### 2. SSH 접속
+
+자동 생성된 키를 사용하는 경우 (기본값):
+```bash
+ssh -i ~/.ssh/id_oci_auto_private ubuntu@<공용 IP>
+```
+
+본인 키를 `oci.env` 의 `SSH_AUTHORIZED_KEYS_FILE` 에 지정한 경우:
+```bash
+ssh -i <본인 개인키 경로> ubuntu@<공용 IP>
+```
+
+> 첫 접속 시 "The authenticity of host ... can't be established" 경고가 나오면
+> `yes` 입력하면 됩니다. 사용자명은 Ubuntu 이미지의 경우 항상 `ubuntu` 입니다.
 
 ---
 
@@ -331,13 +402,13 @@ ssh -i ~/.ssh/id_ed25519_oci ubuntu@<공용 IP>
 
 | 변수 | 무엇인가요? | 어디서 얻나요? / 기본값 |
 |------|------------|----------------------|
-| `OCI_REGIONS` | 시도할 리전(쉼표 구분) | OCI Console 우측 상단 리전 드롭다운. 예) `ap-seoul-1,ap-chuncheon-1` |
+| `OCI_REGIONS` | 시도할 리전(쉼표 구분) | OCI Console 우측 상단 리전 드롭다운. **홈 리전 외엔 STEP 3-0 으로 구독 필요.** 예) `ap-seoul-1,ap-chuncheon-1` |
 | `DISPLAY_NAME` | 인스턴스 이름 | 자유롭게. 기본값 `a1-free-arm` |
 | `OCI_COMPUTE_SHAPE` | 서버 종류 | `VM.Standard.A1.Flex` (ARM 권장) 또는 `VM.Standard.E2.1.Micro` |
 | `SECOND_MICRO_INSTANCE` | 2번째 Micro 만들 때만 `True` | `False` |
 | `REQUEST_WAIT_TIME_SECS` | 재시도 간격(초) | 권장 `90` (60 미만은 OCI 차단 위험) |
 | `OCI_SUBNET_ID` | 서브넷 OCID | **신규 계정은 STEP 3-1 로 VCN 생성 후 OCID 입력 필요.** 기존 VCN 이 있으면 자동 탐색 |
-| `OCI_IMAGE_ID` | 특정 이미지 OCID | OCI Console → 컴퓨트 → 이미지. 비우면 아래 OS+버전으로 자동 탐색 |
+| `OCI_IMAGE_ID` | 특정 이미지 OCID | OCI Console 햄버거 → **컴퓨트 → 사용자 정의 이미지** (또는 인스턴스 생성 화면 → 이미지 변경 → 원하는 이미지 우측 점3개 → "이미지 OCID 복사"). 비우면 아래 OS+버전으로 자동 탐색 |
 | `OPERATING_SYSTEM` ⚠️ | OS 이름 | `Canonical Ubuntu` (기본) — `OCI_IMAGE_ID` 비울 때 정확해야 함 |
 | `OS_VERSION` ⚠️ | OS 버전 | `24.04` (기본) — `OCI_IMAGE_ID` 비울 때 정확해야 함 |
 | `ASSIGN_PUBLIC_IP` | 공용 IP 자동 할당 | `true` 또는 `false` |
