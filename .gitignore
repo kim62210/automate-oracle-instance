@@ -19,12 +19,8 @@ oci_api_private_key.pem
 
 # Runtime artifacts
 INSTANCE_CREATED
-UNHANDLED_ERROR.log
-ERROR_IN_CONFIG.log
-launch_instance.log
-setup_and_info.log
-output.log
 images_list.json
+*.log
 
 # IDE
 .idea/

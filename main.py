@@ -24,7 +24,7 @@ OCI_CONFIG = os.getenv("OCI_CONFIG", "").strip()
 OCT_FREE_AD = os.getenv("OCT_FREE_AD", "").strip()
 DISPLAY_NAME = os.getenv("DISPLAY_NAME", "").strip()
 try:
-    WAIT_TIME = int(os.getenv("REQUEST_WAIT_TIME_SECS", "60").strip() or "60")
+    WAIT_TIME = int(os.getenv("REQUEST_WAIT_TIME_SECS", "90").strip() or "90")
 except ValueError:
     print("[CONFIG ERROR] REQUEST_WAIT_TIME_SECS 는 정수여야 합니다.", file=sys.stderr)
     sys.exit(1)

@@ -100,6 +100,28 @@ nano ~/.oci/config
 
 ---
 
+## STEP 3-1. (신규 계정만) VCN/Subnet 생성
+
+**오라클 클라우드를 처음 쓴다면 가상 네트워크(VCN)가 없어서
+이 스크립트가 어디에 인스턴스를 만들지 못 찾습니다.**
+이미 VCN 이 있다면 이 단계는 건너뛰세요.
+
+1. OCI Console 햄버거 메뉴 → **네트워킹(Networking)**
+   → **가상 클라우드 네트워크(Virtual Cloud Networks)**
+2. **VCN 마법사 시작(Start VCN Wizard)** 버튼 클릭
+3. **인터넷 연결성을 가진 VCN 생성(Create VCN with Internet Connectivity)** 선택
+4. VCN 이름 입력 (예: `free-tier-vcn`) → 나머지 기본값 그대로 → **다음/생성**
+
+생성 후, **서브넷 OCID 를 복사해서 메모**해 둡니다:
+- 만든 VCN 클릭 → 좌측 **서브넷(Subnets)** → 공용 서브넷 클릭
+- 우측 OCID 옆 **복사(Copy)** 버튼 클릭
+
+> 💡 멀티 리전(`ap-seoul-1,ap-chuncheon-1` 등)을 쓰려면
+> **각 리전마다** VCN/Subnet 을 만들어야 합니다.
+> (먼저 우측 상단 리전 드롭다운으로 리전 변경 후 같은 절차 반복)
+
+---
+
 ## STEP 4. SSH 키 만들기
 
 서버에 접속하려면 자물쇠와 열쇠 같은 SSH 키 한 쌍이 필요합니다.
@@ -185,7 +207,7 @@ DISCORD_WEBHOOK=https://discord.com/api/webhooks/.....
 실행 결과는 화면과 `setup_init.log` 에 기록됩니다.
 
 성공적으로 시작되면 백그라운드에서 계속 시도합니다:
-- **자리가 없을 때**: 60초 후 다시 시도 (Discord 로 10회마다 진행 상황 알림)
+- **자리가 없을 때**: 90초 후 다시 시도 (Discord 로 10회마다 진행 상황 알림)
 - **자리가 났을 때**: 인스턴스 생성 + Discord 로 성공 알림 + `INSTANCE_CREATED` 파일 생성
 - **에러 발생 시**: `ERROR_IN_CONFIG.log` 또는 `setup_init.log` 에 사유 기록
 
@@ -278,17 +300,20 @@ ssh -i ~/.ssh/id_ed25519_oci ubuntu@<공용 IP>
 | `DISPLAY_NAME` | 인스턴스 이름 | 자유롭게. 기본값 `a1-free-arm` |
 | `OCI_COMPUTE_SHAPE` | 서버 종류 | `VM.Standard.A1.Flex` (ARM 권장) 또는 `VM.Standard.E2.1.Micro` |
 | `SECOND_MICRO_INSTANCE` | 2번째 Micro 만들 때만 `True` | `False` |
-| `REQUEST_WAIT_TIME_SECS` | 재시도 간격(초) | 기본 `60` |
-| `OCI_SUBNET_ID` | 서브넷 OCID | OCI Console → 네트워킹 → VCN → 서브넷. 비우면 자동 탐색 |
-| `OCI_IMAGE_ID` | 특정 이미지 OCID | OCI Console → 컴퓨트 → 이미지. 비우면 OS+버전으로 자동 탐색 |
-| `OPERATING_SYSTEM` | OS 이름 | `Canonical Ubuntu` (기본) |
-| `OS_VERSION` | OS 버전 | `24.04` (기본) |
+| `REQUEST_WAIT_TIME_SECS` | 재시도 간격(초) | 권장 `90` (60 미만은 OCI 차단 위험) |
+| `OCI_SUBNET_ID` | 서브넷 OCID | **신규 계정은 STEP 3-1 로 VCN 생성 후 OCID 입력 필요.** 기존 VCN 이 있으면 자동 탐색 |
+| `OCI_IMAGE_ID` | 특정 이미지 OCID | OCI Console → 컴퓨트 → 이미지. 비우면 아래 OS+버전으로 자동 탐색 |
+| `OPERATING_SYSTEM` ⚠️ | OS 이름 | `Canonical Ubuntu` (기본) — `OCI_IMAGE_ID` 비울 때 정확해야 함 |
+| `OS_VERSION` ⚠️ | OS 버전 | `24.04` (기본) — `OCI_IMAGE_ID` 비울 때 정확해야 함 |
 | `ASSIGN_PUBLIC_IP` | 공용 IP 자동 할당 | `true` 또는 `false` |
 | `BOOT_VOLUME_SIZE` | 부트 디스크 GB (최소 50) | `50` |
 | `DISCORD_WEBHOOK` | Discord 알림 URL | Discord 서버 설정 → 연동 → 웹후크 → URL 복사 (STEP 7) |
 
 > 💡 **모르는 항목은 비워두거나 기본값을 그대로 사용하면 됩니다.**
 > `oci.env.example` 파일에는 항목별로 더 자세한 클릭 경로가 주석으로 적혀 있습니다.
+>
+> ⚠️ 표시 항목은 "조건부 필수" — 다른 값(`OCI_IMAGE_ID`)이 비어있을 때
+> 정확하게 채워져 있어야 합니다.
 
 ---
 
