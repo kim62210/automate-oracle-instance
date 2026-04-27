@@ -114,6 +114,23 @@ cd automate-oracle-instance
 
 ---
 
+## AI 에이전트로 진행하기 (선택)
+
+Claude Code, Codex CLI, Cursor 등 **브라우저 컨트롤러를 가진 AI 에이전트**가 OCI Console 클릭 작업까지 사용자를 대신해 처리할 수 있도록 별도 가이드를 제공합니다.
+
+대상: Playwright / Chrome DevTools (CDP) / Puppeteer / Selenium 등을 도구로 가진 LLM 기반 에이전트.
+
+진입 문서:
+- [AGENTS.md](AGENTS.md) — 에이전트가 자동 인식하는 표준 진입 문서. 허용/금지 작업, 표준 흐름, 도구 매핑
+- [docs/agent/oci-onboarding.md](docs/agent/oci-onboarding.md) — OCI Console 단계별 시나리오 (한/영 라벨, role/aria-label hint, 실패 폴백, Playwright 의사 코드)
+- [docs/agent/local-execution.md](docs/agent/local-execution.md) — 인스톨러 자동 실행 / `./setup.sh` 4-입력 stdin 자동 채움 (pty 패턴) / 모니터링 / 에러 회복
+- [docs/agent/secrets-handling.md](docs/agent/secrets-handling.md) — `.pem` / OCID / fingerprint / Discord webhook 마스킹 정책
+
+> ⚠️ **OCI 계정 로그인은 반드시 사용자가 직접** 진행하세요. 에이전트가 비밀번호/2FA 를 입력해서는 안 됩니다.
+> 에이전트는 사용자가 로그인 완료한 브라우저 세션을 인계받아 그 다음 작업 (API 키 추가, .pem 다운, 미리보기 복사) 부터 처리합니다.
+
+---
+
 ## STEP 0. 오라클 클라우드 계정 만들기 (이미 있으면 STEP 1)
 
 1. https://www.oracle.com/cloud/free/ 접속 → **무료 계층 시작(Start for Free)** 클릭
