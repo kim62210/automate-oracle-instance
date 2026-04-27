@@ -13,11 +13,13 @@ env/
 # OCI secrets
 oci.env
 oci.env.bak
+oci.env.bak.*
 oci_config
 oci_api_private_key.pem
 *.pem
 
 # Runtime artifacts
+.main.pid
 INSTANCE_CREATED
 images_list.json
 *.log

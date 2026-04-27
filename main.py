@@ -28,7 +28,10 @@ try:
 except ValueError:
     print("[CONFIG ERROR] REQUEST_WAIT_TIME_SECS 는 정수여야 합니다.", file=sys.stderr)
     sys.exit(1)
-SSH_AUTHORIZED_KEYS_FILE = os.getenv("SSH_AUTHORIZED_KEYS_FILE", "").strip()
+SSH_AUTHORIZED_KEYS_FILE = (
+    os.getenv("SSH_AUTHORIZED_KEYS_FILE", "").strip()
+    or str(Path.home() / ".ssh" / "oci_auto.pub")
+)
 OCI_IMAGE_ID = os.getenv("OCI_IMAGE_ID", None).strip() if os.getenv("OCI_IMAGE_ID") else None
 OCI_COMPUTE_SHAPE = os.getenv("OCI_COMPUTE_SHAPE", ARM_SHAPE).strip()
 SECOND_MICRO_INSTANCE = os.getenv("SECOND_MICRO_INSTANCE", 'False').strip().lower() == 'true'
@@ -371,7 +374,10 @@ def read_or_generate_ssh_public_key(public_key_file: Union[str, Path]):
     if not public_key_path.is_file():
         logging.info("SSH key doesn't exist... Generating SSH Key Pair")
         public_key_path.parent.mkdir(parents=True, exist_ok=True)
-        private_key_path = public_key_path.with_name(f"{public_key_path.stem}_private")
+        if public_key_path.suffix == ".pub":
+            private_key_path = public_key_path.with_suffix("")
+        else:
+            private_key_path = public_key_path.with_name(f"{public_key_path.stem}_private")
         generate_ssh_key_pair(public_key_path, private_key_path)
 
     with open(public_key_path, "r", encoding="utf-8") as pub_key_file:

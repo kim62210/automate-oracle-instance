@@ -80,6 +80,7 @@ trap handle_suspend SIGTSTP
 # Python 메인 스크립트 백그라운드 실행 (stderr 까지 setup_init.log 에 캡처)
 nohup python3 main.py > setup_init.log 2>&1 &
 SCRIPT_PID=$!
+echo "$SCRIPT_PID" > .main.pid
 echo "[INFO] main.py 실행 시작 (PID: $SCRIPT_PID)"
 
 # 백그라운드 프로세스 생존 확인
@@ -128,5 +129,6 @@ done
 
 send_notification "[종료] OCI 인스턴스 생성 스크립트가 종료되었습니다."
 
+rm -f .main.pid
 deactivate
 exit 0
