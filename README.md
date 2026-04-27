@@ -27,60 +27,90 @@
 
 ---
 
-## 빠른 시작 (자동 OOBE 마법사, 강력 권장)
+## 빠른 시작 (부트스트랩 인스톨러, 강력 권장)
 
-**터미널 입력은 4번**, 나머지는 모두 자동으로 처리됩니다.
+비개발자라면 **명령 한 줄 또는 더블클릭** 으로 의존성 설치 + git clone + OOBE 마법사까지 자동 진행됩니다.
 
 ### 0) OCI Console 에서 미리 준비 (브라우저, 5분)
 
 1. **OCI 가입** -- [STEP 0](#step-0-오라클-클라우드-계정-만들기) 참고 (이미 있으면 패스)
 2. **API 키 추가 + 개인 키(.pem) 다운로드 + 구성 파일 미리보기 복사** -- [STEP 1](#step-1-oci-console-에서-api-키-만들기) 참고
 
-### 1) 스크립트 받기
+### 1) 인스톨러 실행
 
+#### macOS
+
+**옵션 A. 터미널 한 줄 (가장 간단)**
 ```bash
-cd ~
-git clone https://github.com/kim62210/automate-oracle-instance.git
-cd automate-oracle-instance
+curl -fsSL https://raw.githubusercontent.com/kim62210/automate-oracle-instance/main/installers/macos/install.sh | bash
 ```
 
-### 2) 자동 셋업 (4-입력)
+**옵션 B. 더블클릭**
+1. [`installers/macos/`](installers/macos/) 폴더 다운로드
+2. 터미널에서 `chmod +x OciFreeArm.command install.sh` (한 번만)
+3. `OciFreeArm.command` 우클릭 → **열기**
 
-```bash
-./setup.sh
+#### Windows (WSL 필요)
+
+**옵션 A. PowerShell 한 줄 (가장 간단)**
+```powershell
+iwr -useb https://raw.githubusercontent.com/kim62210/automate-oracle-instance/main/installers/windows/install.ps1 | iex
 ```
 
-마법사가 다음을 자동으로 처리합니다:
-| 단계 | 사용자 입력 | 자동 처리 |
+**옵션 B. 더블클릭**
+1. [`installers/windows/`](installers/windows/) 폴더 다운로드
+2. `OciFreeArm.cmd` 더블클릭
+
+> ⚠️ Windows 는 **WSL (Ubuntu) 가 미리 설치되어 있어야 합니다.**
+> 인스톨러는 WSL 자체를 자동 설치하지 않고, 미설치 시 안내 메시지 후 종료합니다.
+> 설치 방법: 관리자 PowerShell 에서 `wsl --install` 실행 후 재부팅. 자세한 내용은 [installers/README.md](installers/README.md) 참고.
+
+### 2) 인스톨러가 자동으로 처리하는 것
+
+| 단계 | 자동 |
+|---|---|
+| 의존성 확인/설치 | macOS: `brew install git python@3.12` (brew 없으면 안내) <br/> Windows: WSL 안에서 `apt install git python3 python3-venv` |
+| 레포 받기 | `~/automate-oracle-instance` 에 clone (있으면 `git pull`) |
+| OOBE 마법사 (`./setup.sh`) | 4-입력만 받고 나머지(.pem 이동, oci_config 작성, OCI 인증, AD 탐지, Subnet 자동 탐색/생성, oci.env 작성) 모두 자동 |
+| 인스턴스 자동 생성 (`./setup_init.sh`) | 백그라운드에서 자리 날 때까지 90초마다 재시도 |
+
+### 3) OOBE 마법사 안에서 받는 4-입력
+
+| 단계 | 입력 | 자동 처리 |
 |---|---|---|
-| **[1/4]** `.pem` 배치 | Enter (또는 다른 경로) | `~/Downloads` 의 가장 최근 `.pem` 자동 감지 → 레포 폴더로 이동 + 권한 600 |
-| **[2/4]** 구성 파일 미리보기 | 박스 내용 통째로 붙여넣고 Ctrl+D | `oci_config` 파일 자동 생성, `key_file=` 라인 절대경로 자동 치환 |
+| **[1/4]** `.pem` 배치 | Enter (또는 다른 경로) | `~/Downloads` 의 가장 최근 `.pem` 자동 감지 (WSL 환경은 Windows Downloads 까지 탐색) → 레포 폴더로 이동 + 권한 600 |
+| **[2/4]** 구성 파일 미리보기 | 박스 내용 통째로 붙여넣고 Ctrl+D | `oci_config` 자동 생성, `key_file=` 라인 절대경로 자동 치환 |
 | **(자동)** OCI 인증 + AD 탐지 + 공용 서브넷 탐색 | 없음 | OCI API 호출로 검증, AD 자동 결정, 기존 VCN/Subnet 자동 발견 |
 | **[3/4]** 서브넷 (필요 시) | Enter (자동 생성) 또는 1/2 선택 | 신규 계정이면 Free Tier VCN/IGW/Subnet 자동 생성 |
 | **[4/4]** Discord Webhook | URL 또는 Enter | `oci.env` 에 기록 |
 
-### 3) 인스턴스 자동 생성 시작
+### 4) 셋업 점검 / 중지 / 접속
 
+레포 디렉토리(`~/automate-oracle-instance`)에서:
 ```bash
-./setup_init.sh
+./doctor.sh           # 설정 진단
+./stop.sh             # 백그라운드 main.py 안전 종료
+cat INSTANCE_CREATED  # 생성된 인스턴스 정보 (공용 IP)
 ```
 
-자리가 날 때까지 계속 시도합니다. 성공하면 `INSTANCE_CREATED` 파일이 생기고 Discord 로 알림이 옵니다.
-
-### 4) 셋업 점검 / 중지
-
-```bash
-./doctor.sh   # 설정 진단
-./stop.sh     # 백그라운드 main.py 안전 종료
-```
-
-### 5) 만들어진 서버에 접속
-
-자동 생성된 SSH 키 사용 (기본):
+자동 생성된 SSH 키로 접속:
 ```bash
 ssh -i ~/.ssh/oci_auto ubuntu@<공용IP>
 ```
-공용 IP 는 `cat INSTANCE_CREATED` 또는 OCI Console 에서 확인.
+
+---
+
+## 빠른 시작 (수동 git clone)
+
+인스톨러를 안 쓰고 직접 진행하려는 경우:
+```bash
+cd ~
+git clone https://github.com/kim62210/automate-oracle-instance.git
+cd automate-oracle-instance
+./setup.sh         # 4-입력 OOBE 마법사
+./setup_init.sh    # 인스턴스 자동 생성 시작
+```
+이후 흐름과 입력은 위 [3) OOBE 마법사 안에서 받는 4-입력](#3-oobe-마법사-안에서-받는-4-입력) 표와 동일합니다.
 
 ---
 
