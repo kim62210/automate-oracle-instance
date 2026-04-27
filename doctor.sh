@@ -93,16 +93,29 @@ fi
 
 # ---------- [4] SSH 공개키 ----------
 section "[4] SSH_AUTHORIZED_KEYS_FILE"
-if [ -z "${SSH_AUTHORIZED_KEYS_FILE:-}" ]; then
-    fail "SSH_AUTHORIZED_KEYS_FILE 가 비어있음"
-else
-    SSH_PATH_EXPANDED=$(expand_tilde "$SSH_AUTHORIZED_KEYS_FILE")
-    if [ -f "$SSH_PATH_EXPANDED" ]; then
-        ok "SSH 공개키 존재: $SSH_PATH_EXPANDED"
+SSH_RAW="${SSH_AUTHORIZED_KEYS_FILE:-}"
+if [ -z "$SSH_RAW" ]; then
+    SSH_RAW="$HOME/.ssh/oci_auto.pub"
+    warn "SSH_AUTHORIZED_KEYS_FILE 비어있음 → 기본값 사용: $SSH_RAW"
+fi
+SSH_PATH_EXPANDED=$(expand_tilde "$SSH_RAW")
+if [ -f "$SSH_PATH_EXPANDED" ]; then
+    ok "SSH 공개키 존재: $SSH_PATH_EXPANDED"
+    # 짝 개인키 확인 (.pub 떼면 그 자리, 또는 _private 접미사)
+    PRIV_GUESS_A="${SSH_PATH_EXPANDED%.pub}"
+    PRIV_GUESS_B="${SSH_PATH_EXPANDED%.pub}_private"
+    if [ -f "$PRIV_GUESS_A" ] && [ "$PRIV_GUESS_A" != "$SSH_PATH_EXPANDED" ]; then
+        ok "  - 짝 개인키 발견: $PRIV_GUESS_A"
+    elif [ -f "$PRIV_GUESS_B" ]; then
+        ok "  - 짝 개인키 발견: $PRIV_GUESS_B"
     else
-        warn "SSH 공개키 미존재: $SSH_PATH_EXPANDED"
-        echo "         -> 첫 실행 시 자동 생성됨 (RSA 2048)"
+        warn "  - 짝 개인키 미발견 (자동 생성된 키가 아니면 직접 보관 중인지 확인)"
     fi
+else
+    warn "SSH 공개키 미존재: $SSH_PATH_EXPANDED"
+    echo "         -> 첫 실행 시 자동 생성됨 (RSA 2048)"
+    echo "            공개키: $SSH_PATH_EXPANDED"
+    echo "            개인키: ${SSH_PATH_EXPANDED%.pub}  (서버 SSH 접속 시 사용)"
 fi
 
 # ---------- [5] OCI_SUBNET_ID ----------
