@@ -52,14 +52,27 @@ BANNER
 # ---------- [1/4] .pem 자동 감지 / 이동 ----------
 step "[1/4] OCI API 키 (.pem) 배치"
 
-DEFAULT_PEM=""
-if compgen -G "$HOME/Downloads/*.pem" > /dev/null 2>&1; then
-    # shellcheck disable=SC2012
-    DEFAULT_PEM=$(ls -t "$HOME"/Downloads/*.pem 2>/dev/null | head -n 1)
+# 검색 대상 디렉토리 — WSL 환경에서는 Windows 사용자의 Downloads 도 포함
+PEM_SEARCH_DIRS=("$HOME/Downloads")
+if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+    for win_dl in /mnt/c/Users/*/Downloads; do
+        [ -d "$win_dl" ] && PEM_SEARCH_DIRS+=("$win_dl")
+    done
 fi
 
+DEFAULT_PEM=""
+for dir in "${PEM_SEARCH_DIRS[@]}"; do
+    if compgen -G "$dir/*.pem" > /dev/null 2>&1; then
+        # shellcheck disable=SC2012
+        candidate=$(ls -t "$dir"/*.pem 2>/dev/null | head -n 1)
+        if [ -z "$DEFAULT_PEM" ] || [ "$candidate" -nt "$DEFAULT_PEM" ]; then
+            DEFAULT_PEM="$candidate"
+        fi
+    fi
+done
+
 if [ -n "$DEFAULT_PEM" ]; then
-    echo "  ~/Downloads 에서 가장 최근 .pem 자동 감지: $(basename "$DEFAULT_PEM")"
+    echo "  자동 감지된 가장 최근 .pem: $DEFAULT_PEM"
     PEM_INPUT=$(ask "Enter=그대로 사용 / 다른 파일이면 절대경로 입력" "$DEFAULT_PEM")
 else
     PEM_INPUT=$(ask "다운받은 .pem 절대경로 입력 (예: ~/Downloads/oracle.pem)" "")
